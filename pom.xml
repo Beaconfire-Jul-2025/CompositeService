@@ -13,19 +13,14 @@
     <version>0.0.1-SNAPSHOT</version>
     <name>composite</name>
     <description>composite</description>
-    <url/>
-    <licenses>
-        <license/>
-    </licenses>
-    <developers>
-        <developer/>
-    </developers>
-    <scm>
-        <connection/>
-        <developerConnection/>
-        <tag/>
-        <url/>
-    </scm>
+    <profiles>
+        <profile>
+            <id>dockerfile</id>
+            <build>
+                <finalName>application</finalName>
+            </build>
+        </profile>
+    </profiles>
     <properties>
         <java.version>1.8</java.version>
         <spring-cloud.version>2021.0.9</spring-cloud.version>
@@ -65,8 +60,21 @@
             <optional>true</optional>
         </dependency>
         <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-config</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-ui</artifactId>
+            <version>1.8.0</version>
         </dependency>
         <dependency>
             <groupId>software.amazon.awssdk</groupId>

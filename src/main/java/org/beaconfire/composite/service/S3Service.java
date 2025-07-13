@@ -2,7 +2,7 @@ package org.beaconfire.composite.service;
 
 import org.beaconfire.composite.dto.PresignedUrlRequest;
 import org.beaconfire.composite.dto.PresignedUrlResponse;
-import org.beaconfire.composite.enums.BucketType;
+import org.beaconfire.composite.enums.FolderType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,39 +14,33 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
 import java.util.UUID;
 
 @Service
 public class S3Service {
 
     private static final Logger logger = LoggerFactory.getLogger(S3Service.class);
-    // Allowed content types for each bucket type
-    private static final List<String> AVATAR_ALLOWED_TYPES = Arrays.asList(
-            "image/jpeg", "image/png", "image/gif", "image/webp"
-    );
-    private static final List<String> DOCUMENT_ALLOWED_TYPES = Arrays.asList(
-            "application/pdf", "image/jpeg", "image/png", "image/tiff", "image/bmp"
-    );
     private final S3Presigner s3Presigner;
     @Value("${aws.s3.presigned-url.default-expiration-minutes:60}")
     private long defaultExpirationMinutes;
+    @Value("${aws.s3.bucket-name}")
+    private String bucketName;
+    @Value("${aws.s3.endpoint:}")
+    private String endpoint;
 
     public S3Service(S3Presigner s3Presigner) {
         this.s3Presigner = s3Presigner;
     }
 
-    // Modified method signature to directly accept BucketType
-    public PresignedUrlResponse generatePresignedUrl(PresignedUrlRequest request, BucketType bucketType) {
-        // BucketType bucketType = BucketType.fromString(request.getBucketType()); // This line is removed
-        validateRequest(request, bucketType);
+    public PresignedUrlResponse generatePresignedUrl(PresignedUrlRequest request) {
+        validateRequest(request);
 
-        String key = generateKey(request, bucketType);
-        Duration expiration = Duration.ofMinutes(bucketType.getExpirationMinutes());
+        String key = generateKey(request);
+        // Always use TEMP folder type
+        Duration expiration = Duration.ofMinutes(FolderType.TEMP.getExpirationMinutes());
 
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(bucketType.getBucketName())
+                .bucket(bucketName)
                 .key(key)
                 .contentType(request.getContentType())
                 .contentLength(request.getFileSizeBytes())
@@ -61,72 +55,45 @@ public class S3Service {
 
         Instant expiresAt = Instant.now().plus(expiration);
 
-        logger.info("Generated presigned URL for bucket: {}, key: {}, expires at: {}",
-                bucketType.getBucketName(), key, expiresAt);
+        String presignedUrl = presignedRequest.url().toString();
+        // Only rewrite to path-style if endpoint is set (i.e., using LocalStack)
+        if (endpoint != null && !endpoint.isEmpty()) {
+            try {
+                java.net.URL url = new java.net.URL(presignedUrl);
+                String newHost = new java.net.URL(endpoint).getAuthority();
+                String newPath = "/" + bucketName + url.getPath();
+                presignedUrl = url.getProtocol() + "://" + newHost + newPath + (url.getQuery() != null ? ("?" + url.getQuery()) : "");
+            } catch (Exception e) {
+                logger.warn("Failed to rewrite presigned URL to path-style: {}", e.getMessage());
+            }
+        }
+
+        logger.info("Generated presigned URL for key: {}, expires at: {}",
+                key, expiresAt);
 
         return new PresignedUrlResponse(
-                presignedRequest.url().toString(),
+                presignedUrl,
                 key,
-                bucketType.getBucketName(),
                 expiresAt
         );
     }
 
-    private void validateRequest(PresignedUrlRequest request, BucketType bucketType) {
-        // File size validation
-        long maxSizeBytes = bucketType.getMaxFileSizeMb() * 1024 * 1024;
+    private void validateRequest(PresignedUrlRequest request) {
+        long maxSizeBytes = FolderType.TEMP.getMaxFileSizeMb() * 1024 * 1024;
         if (request.getFileSizeBytes() > maxSizeBytes) {
             throw new IllegalArgumentException(
-                    String.format("File size exceeds maximum allowed size of %d MB for bucket type %s",
-                            bucketType.getMaxFileSizeMb(), bucketType.name()));
-        }
-
-        // Content type validation
-        if (!isValidContentType(request.getContentType(), bucketType)) {
-            throw new IllegalArgumentException(
-                    String.format("Content type '%s' is not allowed for bucket type %s",
-                            request.getContentType(), bucketType.name()));
+                    String.format("File size exceeds maximum allowed size of %d MB for TEMP folder",
+                            FolderType.TEMP.getMaxFileSizeMb()));
         }
     }
 
-    private boolean isValidContentType(String contentType, BucketType bucketType) {
-        if (contentType == null || contentType.trim().isEmpty()) {
-            return false;
-        }
-
-        switch (bucketType) {
-            case AVATAR:
-                return AVATAR_ALLOWED_TYPES.contains(contentType.toLowerCase());
-            case DRIVER_LICENSE:
-            case VISA_DOCUMENTS:
-            case PERSONAL_DOCUMENTS:
-                return DOCUMENT_ALLOWED_TYPES.contains(contentType.toLowerCase());
-            case TEMP:
-                return true; // Allow any content type for temp bucket
-            default:
-                return false;
-        }
-    }
-
-    private String generateKey(PresignedUrlRequest request, BucketType bucketType) {
+    private String generateKey(PresignedUrlRequest request) {
         String timestamp = String.valueOf(System.currentTimeMillis());
         String uniqueId = UUID.randomUUID().toString().substring(0, 8);
         String sanitizedFileName = sanitizeFileName(request.getFileName());
-
         StringBuilder keyBuilder = new StringBuilder();
-
-        // Add bucket type prefix
-        keyBuilder.append(bucketType.name().toLowerCase()).append("/");
-
-        // Add optional folder
-        if (request.getFolder() != null && !request.getFolder().trim().isEmpty()) {
-            String sanitizedFolder = sanitizeFolder(request.getFolder());
-            keyBuilder.append(sanitizedFolder).append("/");
-        }
-
-        // Add timestamp and unique ID for uniqueness
+        keyBuilder.append(FolderType.TEMP.getFolderName()).append("/");
         keyBuilder.append(timestamp).append("_").append(uniqueId).append("_").append(sanitizedFileName);
-
         return keyBuilder.toString();
     }
 
@@ -137,9 +104,5 @@ public class S3Service {
     private String sanitizeFolder(String folder) {
         return folder.replaceAll("^/+|/+$", "")
                 .replaceAll("[^a-zA-Z0-9._/-]", "_");
-    }
-
-    public List<BucketType> getAllBucketTypes() {
-        return Arrays.asList(BucketType.values());
     }
 }

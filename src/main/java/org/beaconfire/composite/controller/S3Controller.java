@@ -2,7 +2,6 @@ package org.beaconfire.composite.controller;
 
 import org.beaconfire.composite.dto.PresignedUrlRequest;
 import org.beaconfire.composite.dto.PresignedUrlResponse;
-import org.beaconfire.composite.enums.BucketType;
 import org.beaconfire.composite.service.S3Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,8 +31,7 @@ public class S3Controller {
                 request.getFileName(), request.getContentType(), request.getFileSizeBytes());
 
         try {
-            // Hardcode BucketType to TEMP
-            PresignedUrlResponse response = s3Service.generatePresignedUrl(request, BucketType.TEMP);
+            PresignedUrlResponse response = s3Service.generatePresignedUrl(request);
             logger.info("Successfully generated presigned URL for key: {}", response.getKey());
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {

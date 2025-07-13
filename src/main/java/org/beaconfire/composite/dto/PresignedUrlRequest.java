@@ -18,7 +18,4 @@ public class PresignedUrlRequest {
 
     @NotNull(message = "File size is required")
     private Long fileSizeBytes;
-
-    private String folder;
-
 }
