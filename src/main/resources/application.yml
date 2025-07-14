@@ -3,3 +3,25 @@ spring:
     name: composite
   config:
     import: optional:configserver:${SPRING_CLOUD_CONFIG_URI:http://localhost:8888}
+
+  # RabbitMQ Configuration
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: ${RABBITMQ_VHOST:/}
+
+# Service URLs for OpenFeign clients
+services:
+  employee:
+    url: ${EMPLOYEE_SERVICE_URL:http://localhost:8081}
+  application:
+    url: ${APPLICATION_SERVICE_URL:http://localhost:8082}
+
+# AWS S3 Configuration (existing)
+aws:
+  s3:
+    bucket-name: ${AWS_S3_BUCKET_NAME:my-bucket}
+    presigned-url:
+      default-expiration-minutes: 60
