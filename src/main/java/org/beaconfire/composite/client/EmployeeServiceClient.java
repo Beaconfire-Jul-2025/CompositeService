@@ -1,5 +1,6 @@
 package org.beaconfire.composite.client;
 
+import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import org.beaconfire.composite.dto.OnboardingRequest;
