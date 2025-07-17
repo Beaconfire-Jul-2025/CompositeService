@@ -1,8 +1,6 @@
 package org.beaconfire.composite.client;
 
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;

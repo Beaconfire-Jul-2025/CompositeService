@@ -1,66 +1,67 @@
 package org.beaconfire.composite.exception;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.beaconfire.composite.dto.ApiResponse;
+import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
+import java.net.InetAddress;
+import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 
-@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @Value("${spring.application.name:beaconfire}")
+    private String appName;
+
+    private String traceId() {
+        return MDC.get("traceId");
+    }
+
+    private String host() {
+        try {
+            return InetAddress.getLocalHost().getHostAddress();
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+
+    private ApiResponse<?> fail(String errorCode, String errorMessage, int showType) {
+        return ApiResponse.builder()
+                .success(false)
+                .errorCode(errorCode)
+                .errorMessage(errorMessage)
+                .showType(showType)
+                .traceId(traceId())
+                .host(host())
+                .build();
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> handleValidationExceptions(
-            MethodArgumentNotValidException ex) {
+    public ApiResponse<?> handleValidation(MethodArgumentNotValidException ex) {
+        String msg = ex.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .map(e -> e.getField() + ": " + e.getDefaultMessage())
+                .collect(Collectors.joining(", "));
+        return fail("400001", msg, 2);
+    }
 
-        Map<String, Object> errors = new HashMap<>();
-        errors.put("timestamp", Instant.now());
-        errors.put("status", HttpStatus.BAD_REQUEST.value());
-        errors.put("error", "Validation Failed");
-
-        Map<String, String> fieldErrors = new HashMap<>();
-        ex.getBindingResult().getFieldErrors().forEach(error ->
-                fieldErrors.put(error.getField(), error.getDefaultMessage()));
-
-        errors.put("fieldErrors", fieldErrors);
-
-        log.warn("Validation error: {}", fieldErrors);
-
-        return ResponseEntity.badRequest().body(errors);
+    @ExceptionHandler(NoSuchElementException.class)
+    public ApiResponse<?> notFound(NoSuchElementException ex) {
+        return fail("404001", ex.getMessage(), 2);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(
-            IllegalArgumentException ex) {
-
-        Map<String, Object> error = new HashMap<>();
-        error.put("timestamp", Instant.now());
-        error.put("status", HttpStatus.BAD_REQUEST.value());
-        error.put("error", "Bad Request");
-        error.put("message", ex.getMessage());
-
-        log.warn("Illegal argument: {}", ex.getMessage());
-
-        return ResponseEntity.badRequest().body(error);
+    public ApiResponse<?> badRequest(IllegalArgumentException ex) {
+        return fail("400002", ex.getMessage(), 2);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
-
-        Map<String, Object> error = new HashMap<>();
-        error.put("timestamp", Instant.now());
-        error.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
-        error.put("error", "Internal Server Error");
-        error.put("message", "An unexpected error occurred");
-
-        log.error("Unexpected error", ex);
-
-        return ResponseEntity.internalServerError().body(error);
+    public ApiResponse<?> other(Exception ex) {
+        return fail("500000", "The system is busy, please try again later", 2);
     }
 }
