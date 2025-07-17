@@ -1,6 +1,7 @@
 package org.beaconfire.composite.client;
 
 import lombok.Data;
+import org.beaconfire.composite.dto.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -10,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 public interface ApplicationServiceClient {
 
     @PostMapping("/api/applications")
-    ResponseEntity<ApplicationCreationResponse> createApplication(@RequestBody ApplicationRequest request);
+    ResponseEntity<ApiResponse<ApplicationCreationResponse>> createApplication(@RequestBody ApplicationRequest request);
 
     @Data
     class ApplicationRequest {

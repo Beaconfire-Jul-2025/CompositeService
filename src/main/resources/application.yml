@@ -17,7 +17,14 @@ services:
   employee:
     url: ${EMPLOYEE_SERVICE_URL:http://localhost:8081}
   application:
-    url: ${APPLICATION_SERVICE_URL:http://localhost:8082}
+    url: ${APPLICATION_SERVICE_URL:http://localhost:8080}
+  authentication:
+    url: ${AUTHENTICATION_SERVICE_URL:http://localhost:8081}
+
+# Application configuration
+app:
+  composite:
+    secrets: ${COMPOSITE_SERVICE_SECRET:test-secret-that-should-be-replaced}
 
 # AWS S3 Configuration (existing)
 aws:
