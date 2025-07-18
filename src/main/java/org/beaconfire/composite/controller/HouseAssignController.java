@@ -18,6 +18,9 @@ public class HouseAssignController {
 
     @PostMapping("/assign")
     public ApiResponse<Integer> assignHouse() {
-        return housingServiceClient.assignHouse();
+        return housingServiceClient.assignHouse(
+                "999",
+                "composite-system",
+                "ROLE_COMPOSITE"  );
     }
 }
