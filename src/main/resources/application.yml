@@ -18,6 +18,8 @@ services:
     url: ${EMPLOYEE_SERVICE_URL:http://localhost:8081}
   application:
     url: ${APPLICATION_SERVICE_URL:http://localhost:8082}
+  housing:
+    url: ${HOUSING_SERVICE_URL:http://localhost:8084}
 
 # AWS S3 Configuration (existing)
 aws:
