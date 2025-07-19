@@ -4,18 +4,12 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.beaconfire.composite.client.AuthenticationServiceClient;
-import org.beaconfire.composite.dto.ApiResponse;
+import org.beaconfire.composite.client.EmailServiceClient;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import javax.validation.Valid;
-import javax.validation.constraints.Email;
-import javax.validation.constraints.NotBlank;
 
 @RestController
 @RequestMapping("/invite")
@@ -24,74 +18,52 @@ import javax.validation.constraints.NotBlank;
 public class InvitationController {
 
     private final AuthenticationServiceClient authenticationServiceClient;
+    private final EmailServiceClient emailServiceClient;
 
     @PostMapping
-    public InvitationResponse sendInvitation(
-            @Valid @RequestBody InvitationRequest request) {
-
-        log.info("Sending invitation to email: {}", request.getEmail());
-
+    public InvitationResponse sendInvitation(@RequestBody InvitationRequest request) {
+        log.info("Received invitation request for email: {}", request.getEmail());
         try {
-            // Get username from Spring Security context
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            String username = authentication.getName();
-
-            // Create token request for invitation
-            AuthenticationServiceClient.TokenRequest tokenRequest =
-                    new AuthenticationServiceClient.TokenRequest();
+            // Call auth service to get token
+            AuthenticationServiceClient.TokenRequest tokenRequest = new AuthenticationServiceClient.TokenRequest();
             tokenRequest.setEmail(request.getEmail());
+            tokenRequest.setUserId(request.getUserId() == null ? null : request.getUserId().toString());
             tokenRequest.setPurpose("invitation");
-            tokenRequest.setUserId(username);
 
-            // Call authentication service to generate token
-            ResponseEntity<ApiResponse<AuthenticationServiceClient.TokenResponse>> tokenResponse =
-                    authenticationServiceClient.generateToken(tokenRequest);
-
-            if (tokenResponse.getStatusCode().is2xxSuccessful() &&
-                    tokenResponse.getBody() != null &&
-                    tokenResponse.getBody().getData() != null) {
-
-                AuthenticationServiceClient.TokenResponse tokenData = tokenResponse.getBody().getData();
-
-                // Create response with token information
-                InvitationResponse invitationResponse = new InvitationResponse();
-                invitationResponse.setEmail(request.getEmail());
-                invitationResponse.setToken(tokenData.getToken());
-                invitationResponse.setMessage("Invitation sent successfully");
-                invitationResponse.setExpiresIn(tokenData.getExpiresIn());
-
-                log.info("Invitation sent successfully for email: {}", request.getEmail());
-
-                return invitationResponse;
-
-            } else {
-                log.error("Failed to generate token for invitation: {}", request.getEmail());
-
-                InvitationResponse invitationResponse = new InvitationResponse();
-                invitationResponse.setEmail(request.getEmail());
-                invitationResponse.setToken(null);
-                invitationResponse.setMessage("Failed to generate invitation token");
-                invitationResponse.setExpiresIn(0);
-                return invitationResponse;
+            // Get token from auth service
+            ResponseEntity<org.beaconfire.composite.dto.ApiResponse<AuthenticationServiceClient.TokenResponse>> tokenResponseEntity = authenticationServiceClient.generateToken(tokenRequest);
+            if (tokenResponseEntity == null || !tokenResponseEntity.getStatusCode().is2xxSuccessful() || tokenResponseEntity.getBody() == null || tokenResponseEntity.getBody().getData() == null) {
+                log.error("Failed to generate token for email: {}", request.getEmail());
+                return new InvitationResponse(request.getEmail(), null, "Failed to generate token", null);
             }
+            AuthenticationServiceClient.TokenResponse tokenData = tokenResponseEntity.getBody().getData();
 
+            // Pass token and email to email service
+            EmailServiceClient.EmailRequest emailRequest = new EmailServiceClient.EmailRequest();
+            emailRequest.setTo(request.getEmail());
+            emailRequest.setSubject("Invitation");
+            emailRequest.setBody("Your invitation token: " + tokenData.getToken());
+
+            ResponseEntity<org.beaconfire.composite.dto.ApiResponse<EmailServiceClient.EmailSendResponse>> emailResponseEntity = emailServiceClient.sendEmail(emailRequest);
+            boolean emailSent = emailResponseEntity != null && emailResponseEntity.getStatusCode().is2xxSuccessful() && emailResponseEntity.getBody() != null && "SUCCESS".equalsIgnoreCase(emailResponseEntity.getBody().getData().getStatus());
+
+            if (emailSent) {
+                log.info("Invitation email sent to: {}", request.getEmail());
+                return new InvitationResponse(request.getEmail(), tokenData.getToken(), "Invitation sent successfully", String.valueOf(tokenData.getExpiresIn()));
+            } else {
+                log.error("Failed to send invitation email to: {}", request.getEmail());
+                return new InvitationResponse(request.getEmail(), tokenData.getToken(), "Failed to send invitation email", String.valueOf(tokenData.getExpiresIn()));
+            }
         } catch (Exception e) {
-            log.error("Error sending invitation for email: {}", request.getEmail(), e);
-
-            InvitationResponse invitationResponse = new InvitationResponse();
-            invitationResponse.setEmail(request.getEmail());
-            invitationResponse.setToken(null);
-            invitationResponse.setMessage("Internal server error while sending invitation");
-            invitationResponse.setExpiresIn(0);
-            return invitationResponse;
+            log.error("Error processing invitation for email: {}", request.getEmail(), e);
+            return new InvitationResponse(request.getEmail(), null, "Internal server error", null);
         }
     }
 
     @Data
     public static class InvitationRequest {
-        @NotBlank(message = "Email is required")
-        @Email(message = "Email should be valid")
         private String email;
+        private Integer userId;
     }
 
     @Data
@@ -99,6 +71,13 @@ public class InvitationController {
         private String email;
         private String token;
         private String message;
-        private long expiresIn;
+        private String expiration;
+
+        public InvitationResponse(String email, String token, String message, String expiration) {
+            this.email = email;
+            this.token = token;
+            this.message = message;
+            this.expiration = expiration;
+        }
     }
 }

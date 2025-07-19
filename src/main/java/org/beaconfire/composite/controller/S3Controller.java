@@ -26,9 +26,6 @@ public class S3Controller {
     public ResponseEntity<PresignedUrlResponse> generatePresignedUrl(
             @Valid @RequestBody PresignedUrlRequest request) {
 
-        logger.info("Received request for presigned URL: fileName={}, contentType={}, size={}",
-                request.getFileName(), request.getContentType(), request.getFileSizeBytes());
-
         try {
             PresignedUrlResponse response = s3Service.generatePresignedUrl(request);
             logger.info("Successfully generated presigned URL for key: {}", response.getKey());

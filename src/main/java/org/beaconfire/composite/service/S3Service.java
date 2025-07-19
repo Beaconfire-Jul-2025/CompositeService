@@ -33,8 +33,6 @@ public class S3Service {
     }
 
     public PresignedUrlResponse generatePresignedUrl(PresignedUrlRequest request) {
-        validateRequest(request);
-
         String key = generateKey(request);
         // Always use TEMP folder type
         Duration expiration = Duration.ofMinutes(FolderType.TEMP.getExpirationMinutes());
@@ -42,8 +40,6 @@ public class S3Service {
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
                 .key(key)
-                .contentType(request.getContentType())
-                .contentLength(request.getFileSizeBytes())
                 .build();
 
         PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
@@ -78,23 +74,12 @@ public class S3Service {
         );
     }
 
-    private void validateRequest(PresignedUrlRequest request) {
-        long maxSizeBytes = FolderType.TEMP.getMaxFileSizeMb() * 1024 * 1024;
-        if (request.getFileSizeBytes() > maxSizeBytes) {
-            throw new IllegalArgumentException(
-                    String.format("File size exceeds maximum allowed size of %d MB for TEMP folder",
-                            FolderType.TEMP.getMaxFileSizeMb()));
-        }
-    }
-
     private String generateKey(PresignedUrlRequest request) {
         String timestamp = String.valueOf(System.currentTimeMillis());
         String uniqueId = UUID.randomUUID().toString().substring(0, 8);
-        String sanitizedFileName = sanitizeFileName(request.getFileName());
-        StringBuilder keyBuilder = new StringBuilder();
-        keyBuilder.append(FolderType.TEMP.getFolderName()).append("/");
-        keyBuilder.append(timestamp).append("_").append(uniqueId).append("_").append(sanitizedFileName);
-        return keyBuilder.toString();
+        String sanitizedFileName = sanitizeFileName(request.getFilePurpose());
+        return FolderType.TEMP.getFolderName() + "/" +
+                timestamp + "_" + uniqueId + "_" + sanitizedFileName;
     }
 
     private String sanitizeFileName(String fileName) {

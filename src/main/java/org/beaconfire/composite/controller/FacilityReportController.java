@@ -20,7 +20,8 @@ public class FacilityReportController {
             @RequestParam(defaultValue = "1") int current,
             @RequestParam(defaultValue = "10") int pageSize) {
         // Get userId from Spring Security context
-        String userId = (String) org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Object principal = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        int userId = Integer.parseInt(principal.toString());
         return facilityReportService.getFacilityReportsForEmployee(userId, current, pageSize);
     }
 }
